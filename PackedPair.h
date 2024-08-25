@@ -13,7 +13,7 @@ class PackedPair {
   static_assert(sizeof(U) <= 4, "E must fit within 32 bits.");
 
 public:
-  constexpr PackedPair(T firstValue, U secondValue)
+  constexpr PackedPair(T firstValue, U secondValue) noexcept
       : data(pack(firstValue, secondValue)) {}
 
   // Extract the original T and E from the packed data.

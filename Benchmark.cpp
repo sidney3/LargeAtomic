@@ -44,7 +44,7 @@ struct LargeStruct
 template <typename T, typename IntRegister>
 void testRegister(IntRegister &&concurrentStore) {
   const int numReaders = 1;
-  const int iterations_per_thread = 1000;
+  const int iterations_per_thread = 100000;
 
   std::vector<std::thread> threads;
 

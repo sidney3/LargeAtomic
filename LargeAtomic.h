@@ -34,21 +34,18 @@ private:
   std::atomic<size_t> head = 0;
   std::array<GenerationNode<T>, MaxGenerations> generations = {};
 
-private:
-  static size_t idx(size_t i) { return i % MaxGenerations; }
-
 public:
-  template <typename... Args> LargeAtomic(Args &&...args) {
+  template <typename... Args> LargeAtomic(Args &&...args) noexcept(noexcept(T{})) {
     bool initGeneration =
         generations[0].tryStore(new T{std::forward<Args>(args)...});
     DEBUG_ASSERT(initGeneration);
   }
   ConcurrentView<T> load() {
     while (true) {
-      size_t currHead = head.load();
+      size_t currHead = head.load(std::memory_order_relaxed);
 
-      if (likely(generations[idx(currHead)].tryAddOwner())) {
-        return ConcurrentView<T>{generations[idx(currHead)]};
+      if (likely(generations[currHead].tryAddOwner())) {
+        return ConcurrentView<T>{generations[currHead]};
       }
     }
   }
@@ -59,16 +56,20 @@ public:
     T *newT = new T{std::forward<Args>(args)...};
 
     while (true) {
-      size_t localHead = head.load();
+      size_t localHead = head.load(std::memory_order_relaxed);
       size_t nextHead = localHead + 1;
+      if(nextHead == MaxGenerations)
+      {
+        nextHead = 0;
+      }
 
-      if (unlikely(!generations[idx(nextHead)].tryStore(newT))) {
+      if (unlikely(!generations[nextHead].tryStore(newT))) {
         continue;
       }
-      while (!generations[idx(localHead)].tryRemoveOwner()) {
+      while (!generations[localHead].tryRemoveOwner()) {
       }
 
-      head.fetch_add(1);
+      head.store(nextHead, std::memory_order_relaxed);
       return;
     }
   }
