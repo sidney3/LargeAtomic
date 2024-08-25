@@ -1,8 +1,8 @@
 #include "LargeAtomic.h"
 #include <chrono>
 #include <iostream>
-#include <random>
 #include <thread>
+#include <vector>
 
 using namespace std::chrono;
 
@@ -35,9 +35,7 @@ template <typename Fn> auto benchmarkFunction(Fn &&fn) {
   return system_clock::now() - start;
 }
 
-template<long Size>
-struct LargeStruct
-{
+template <long Size> struct LargeStruct {
   std::array<char, Size> data{};
 };
 
@@ -75,17 +73,26 @@ void testRegister(IntRegister &&concurrentStore) {
 }
 
 void benchmark() {
-  using testing_t = LargeStruct<1096>;
+  using testing_t = int;
 
   std::cout << "Naive locking register: " << std::endl;
-  std::cout << duration_cast<milliseconds>(benchmarkFunction([]() {
-                 testRegister<testing_t>(LockingLargeAtomic<testing_t>());
+  LockingLargeAtomic<testing_t> naive{};
+  std::cout << duration_cast<nanoseconds>(benchmarkFunction([&]() {
+                 testRegister<testing_t>(naive);
                })).count()
-            << "ms" << std::endl;
+            << "ns" << std::endl;
 
   std::cout << "Lock free LargeAtomic: " << std::endl;
-  std::cout << duration_cast<milliseconds>(benchmarkFunction([]() {
-                 testRegister<testing_t>(LargeAtomic<testing_t>());
+  LargeAtomic<testing_t> lockFree{};
+  std::cout << duration_cast<nanoseconds>(benchmarkFunction([&]() {
+                 testRegister<testing_t>(lockFree);
                })).count()
-            << "ms" << std::endl;
+            << "ns" << std::endl;
+
+  std::cout << "std::atomic<int>: " << std::endl;
+  std::atomic<testing_t> atom{};
+  std::cout << duration_cast<nanoseconds>(benchmarkFunction([&]() {
+                 testRegister<testing_t>(atom);
+               })).count()
+            << "ns" << std::endl;
 }

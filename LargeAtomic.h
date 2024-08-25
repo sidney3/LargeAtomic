@@ -1,80 +1,57 @@
 #pragma once
 #include <array>
 #include <atomic>
-#include <functional>
+#include <type_traits>
 #include <utility>
 
-#include "GenerationNode.h"
-#include "macros.h"
-
-template <typename T, long MaxGenerations = 100, typename Allocator = std::allocator<T>> class LargeAtomic;
-
-template <typename T> class ConcurrentView {
-  friend LargeAtomic<T>;
-
-private:
-  std::reference_wrapper<GenerationNode<T>> node;
-  ConcurrentView(GenerationNode<T> &node) : node(node) {}
-
-public:
-  ~ConcurrentView() {
-    while (!node.get().tryRemoveOwner()) {
-    }
-  }
-  const T &operator*() { return node.get().load(); }
-
-  ConcurrentView(const ConcurrentView &) = delete;
-  ConcurrentView(ConcurrentView &&) = delete;
-};
-
-template <typename T, long MaxGenerations, typename Alloc> class LargeAtomic {
+template <typename T, long MaxGenerations = 10> class LargeAtomic {
   static_assert(MaxGenerations >= 2);
 
 private:
   std::atomic<size_t> head = 0;
-  std::array<GenerationNode<T>, MaxGenerations> generations = {};
+  std::atomic<size_t> tail = 0;
+  std::array<std::aligned_storage_t<sizeof(T), alignof(T)>, MaxGenerations>
+      history{};
 
 public:
-  template <typename... Args> constexpr LargeAtomic(Args&&...args) noexcept(noexcept(T{})) {
-
-    Alloc alloc{};
-    for(auto &generation : generations)
-    {
-      generation.addInitPointer(std::allocator_traits<Alloc>::allocate(alloc, sizeof(T)));
-    }
-
-    bool initGeneration = generations[0].tryStore(std::forward<Args>(args)...);
-    DEBUG_ASSERT(initGeneration);
-  }
-  ConcurrentView<T> load() {
-    while (true) {
-      size_t currHead = head.load(std::memory_order_relaxed);
-
-      if (likely(generations[currHead].tryAddOwner())) {
-        return ConcurrentView<T>{generations[currHead]};
-      }
-    }
-  }
-
   template <typename... Args>
-    requires std::is_constructible_v<T, Args...>
-  void store(Args &&...args) {
-    while (true) {
-      size_t localHead = head.load(std::memory_order_relaxed);
-      size_t nextHead = localHead + 1;
-      if(nextHead == MaxGenerations)
-      {
-        nextHead = 0;
-      }
+  constexpr LargeAtomic(Args &&...args) noexcept(noexcept(T{})) {
+    new (&history[0]) T{std::forward<Args>(args)...};
+  }
 
-      if (unlikely(!generations[nextHead].tryStore(args...))) {
-        continue;
-      }
-      while (!generations[localHead].tryRemoveOwner()) {
-      }
-
-      head.store(nextHead, std::memory_order_relaxed);
-      return;
+  ~LargeAtomic()
+  {
+    for(auto &storage : history)
+    {
+      std::destroy_at(&storage);
     }
+  }
+
+public:
+  /*
+    Critically, return a copy as otherwise this value might get overwritten
+    by the writing thread.
+  */
+  T load(std::memory_order order = std::memory_order_acquire) {
+    size_t currHead = head.load(order);
+    tail.store(currHead, order);
+    return *std::launder(reinterpret_cast<const T *>(&history[currHead]));
+  }
+
+  template <typename U>
+    requires std::is_constructible_v<T, U>
+  void store(U &&obj, std::memory_order order = std::memory_order_release) {
+    size_t currTail = tail.load(order);
+    size_t currHead = head.load(order);
+    size_t nextHead = (currHead + 1) % MaxGenerations;
+
+    // child has lagged behind: need to jump past it
+    if (nextHead == currTail) {
+      nextHead = (nextHead + 1) % MaxGenerations;
+    }
+    std::destroy_at(&history[nextHead]);
+    new (&history[nextHead]) T{std::forward<U>(obj)};
+
+    head.store(nextHead, order);
   }
 };
