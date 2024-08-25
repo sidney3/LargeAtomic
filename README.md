@@ -1,6 +1,6 @@
 # LargeAtomic
 
-A single reader single writer lock free atomic storage class that can hold elements of any size. All in 57 lines of C++.
+A single reader single writer lock free atomic storage class that can hold elements of any size. All in 85 lines of C++. This is designed for a fast path reader and slow path writer, and so the reading is done without making any copies.
 
 Takes optional `std::memory_order` parameters that mirror `std::atomic` functionality.
 
@@ -28,10 +28,10 @@ Keep an circular buffer representing the history of states for our register.
 
 Inside this array, keep two pointers,
 
-`tail` := the latest position in our history buffer that we have read from.
+`tail` := the latest position in our history buffer that is getting read from
 `head` := the latest position in our history buffer that we have written to.
 
-So each time we make a write, bump `head` up 1, and each time we make a read, bump `tail` up to head.
+So each time we make a write, bump `head` up 1. Each time we make a read, return an object that, when destroyed, will move `tail` up to `head`. (Note that this allows us to work without copying)
 
 
 ### Jumping the tail

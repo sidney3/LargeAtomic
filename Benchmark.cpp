@@ -73,7 +73,7 @@ void testRegister(IntRegister &&concurrentStore) {
 }
 
 void benchmark() {
-  using testing_t = int;
+  using testing_t = LargeStruct<202>;
 
   std::cout << "Naive locking register: " << std::endl;
   LockingLargeAtomic<testing_t> naive{};
@@ -89,10 +89,10 @@ void benchmark() {
                })).count()
             << "ns" << std::endl;
 
-  std::cout << "std::atomic<int>: " << std::endl;
-  std::atomic<testing_t> atom{};
-  std::cout << duration_cast<nanoseconds>(benchmarkFunction([&]() {
-                 testRegister<testing_t>(atom);
-               })).count()
-            << "ns" << std::endl;
+  /* std::cout << "std::atomic<int>: " << std::endl; */
+  /* std::atomic<testing_t> atom{}; */
+  /* std::cout << duration_cast<nanoseconds>(benchmarkFunction([&]() { */
+  /*                testRegister<testing_t>(atom); */
+  /*              })).count() */
+  /*           << "ns" << std::endl; */
 }

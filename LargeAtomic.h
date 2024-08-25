@@ -1,6 +1,8 @@
 #pragma once
 #include <array>
 #include <atomic>
+#include <memory>
+#include <new>
 #include <type_traits>
 #include <utility>
 
@@ -19,23 +21,41 @@ public:
     new (&history[0]) T{std::forward<Args>(args)...};
   }
 
-  ~LargeAtomic()
-  {
-    for(auto &storage : history)
-    {
+  ~LargeAtomic() {
+    for (auto &storage : history) {
       std::destroy_at(&storage);
     }
   }
+
+private:
+  void release(size_t index, std::memory_order order) {
+    tail.store(head, order);
+  }
+  const T &loadImpl(size_t index) {
+    return *std::launder(reinterpret_cast<const T *>(&history[index]));
+  }
+  class LargeAtomicReturn {
+  private:
+    std::reference_wrapper<LargeAtomic<T, MaxGenerations>> container;
+    size_t generation;
+    std::memory_order order;
+
+  public:
+    LargeAtomicReturn(LargeAtomic<T, MaxGenerations> &container,
+                      size_t generation, std::memory_order order)
+        : container(container), generation(generation), order(order) {}
+    ~LargeAtomicReturn() {}
+    const T &operator*() { return container.get().loadImpl(generation); }
+  };
 
 public:
   /*
     Critically, return a copy as otherwise this value might get overwritten
     by the writing thread.
   */
-  T load(std::memory_order order = std::memory_order_acquire) {
+  LargeAtomicReturn load(std::memory_order order = std::memory_order_acquire) {
     size_t currHead = head.load(order);
-    tail.store(currHead, order);
-    return *std::launder(reinterpret_cast<const T *>(&history[currHead]));
+    return LargeAtomicReturn{*this, currHead, order};
   }
 
   template <typename U>

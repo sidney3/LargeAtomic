@@ -8,13 +8,13 @@ void singleThreadedTest() {
 
   for (int i = 0; i < 100; ++i) {
     concurrentStore.store(i);
-    assert(concurrentStore.load() == i);
+    assert(*concurrentStore.load() == i);
   }
 
   LargeAtomic<std::vector<int>> vectorStore;
   std::vector<int> v = {1, 2, 3};
   vectorStore.store(v);
-  assert(vectorStore.load() == v);
+  assert(*vectorStore.load() == v);
 }
 
 /*
@@ -36,10 +36,10 @@ void multithreadedCorrectnessTest() {
     int previousValue = 0;
     for (int i = 1; i <= 100; ++i) {
       auto currentValue = concurrentStore.load();
-      if (currentValue < previousValue) {
+      if (*currentValue < previousValue) {
         readCorrectly = false;
       }
-      previousValue = currentValue;
+      previousValue = *currentValue;
     }
   };
 
@@ -81,7 +81,7 @@ void stressTest() {
     for (int i = 0; i < iterations_per_thread; ++i) {
       auto loadedValue = concurrentStore.load();
 
-      assert(loadedValue >= 1 && loadedValue <= 100);
+      assert(*loadedValue >= 1 && *loadedValue <= 100);
 
       std::this_thread::sleep_for(std::chrono::microseconds(1));
     }
