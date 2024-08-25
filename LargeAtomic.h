@@ -1,6 +1,7 @@
+#pragma once
 #include <array>
 #include <atomic>
-#include <memory>
+#include <functional>
 #include <utility>
 
 #include "GenerationNode.h"
@@ -38,8 +39,9 @@ private:
 
 public:
   template <typename... Args> LargeAtomic(Args &&...args) {
-    DEBUG_ASSERT(generations[0].tryStore(
-        std::make_shared<T>(std::forward<Args>(args)...)));
+    bool initGeneration =
+        generations[0].tryStore(new T{std::forward<Args>(args)...});
+    DEBUG_ASSERT(initGeneration);
   }
   ConcurrentView<T> load() {
     while (true) {
@@ -54,7 +56,7 @@ public:
   template <typename... Args>
     requires std::is_constructible_v<T, Args...>
   void store(Args &&...args) {
-    std::shared_ptr<T> newT = std::make_shared<T>(std::forward<Args>(args)...);
+    T *newT = new T{std::forward<Args>(args)...};
 
     while (true) {
       size_t localHead = head.load();

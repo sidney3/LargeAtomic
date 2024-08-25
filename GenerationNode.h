@@ -1,9 +1,7 @@
 #pragma once
 #include "PackedPair.h"
+#include "macros.h"
 #include <atomic>
-#include <memory>
-#include <sstream>
-#include <string>
 
 /*
 
@@ -30,10 +28,10 @@ template <typename T> class GenerationNode {
   enum class NodeState { Empty, Filling, Full, Freeing };
   using state_t = PackedPair<NodeState, uint32_t>;
   std::atomic<state_t> currState = state_t{NodeState::Empty, 0};
-  std::shared_ptr<T> currT = nullptr;
+  T *currT = nullptr;
 
 private:
-  static NodeState getCurrState(state_t s) { return s.first(); }
+  static NodeState getStateEnum(state_t s) { return s.first(); }
   static uint32_t getOwnersCount(state_t s) { return s.second(); }
 
 private:
@@ -47,6 +45,7 @@ private:
     }
 
     DEBUG_ASSERT(currT != nullptr && "double free");
+    delete currT;
     currT = nullptr;
 
     currState.store(freedState);
@@ -55,7 +54,7 @@ private:
   }
 
 public:
-  bool tryStore(std::shared_ptr<T> toStore) {
+  bool tryStore(T *toStore) {
     state_t emptyState{NodeState::Empty, 0};
     state_t constructingState{NodeState::Filling, 0};
     state_t constructedState{NodeState::Full, 1};
@@ -73,7 +72,7 @@ public:
   bool tryAddOwner() {
     auto localState = currState.load();
 
-    if (getCurrState(localState) != NodeState::Full) {
+    if (getStateEnum(localState) != NodeState::Full) {
       return false;
     }
     DEBUG_ASSERT(getOwnersCount(localState) > 0 && "empty full");
@@ -83,7 +82,7 @@ public:
   bool tryRemoveOwner() {
     auto localState = currState.load();
 
-    if (getCurrState(localState) != NodeState::Full) {
+    if (getStateEnum(localState) != NodeState::Full) {
       return false;
     }
 
@@ -96,15 +95,11 @@ public:
           localState, state_t{NodeState::Full, getOwnersCount(localState) - 1});
     }
   }
-  bool empty() const {
-    auto localState = currState.load();
-    return getCurrState(localState) == NodeState::Empty;
-  }
 
 public:
   const T &load() const {
     auto localState = currState.load();
-    DEBUG_ASSERT(getCurrState(localState) == NodeState::Full);
+    DEBUG_ASSERT(getStateEnum(localState) == NodeState::Full);
 
     return *currT;
   }
