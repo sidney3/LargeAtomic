@@ -7,7 +7,7 @@
 #include "GenerationNode.h"
 #include "macros.h"
 
-template <typename T, long MaxGenerations = 100> class LargeAtomic;
+template <typename T, long MaxGenerations = 100, typename Allocator = std::allocator<T>> class LargeAtomic;
 
 template <typename T> class ConcurrentView {
   friend LargeAtomic<T>;
@@ -27,7 +27,7 @@ public:
   ConcurrentView(ConcurrentView &&) = delete;
 };
 
-template <typename T, long MaxGenerations> class LargeAtomic {
+template <typename T, long MaxGenerations, typename Alloc> class LargeAtomic {
   static_assert(MaxGenerations >= 2);
 
 private:
@@ -35,9 +35,15 @@ private:
   std::array<GenerationNode<T>, MaxGenerations> generations = {};
 
 public:
-  template <typename... Args> LargeAtomic(Args &&...args) noexcept(noexcept(T{})) {
-    bool initGeneration =
-        generations[0].tryStore(new T{std::forward<Args>(args)...});
+  template <typename... Args> constexpr LargeAtomic(Args&&...args) noexcept(noexcept(T{})) {
+
+    Alloc alloc{};
+    for(auto &generation : generations)
+    {
+      generation.addInitPointer(std::allocator_traits<Alloc>::allocate(alloc, sizeof(T)));
+    }
+
+    bool initGeneration = generations[0].tryStore(std::forward<Args>(args)...);
     DEBUG_ASSERT(initGeneration);
   }
   ConcurrentView<T> load() {
@@ -53,8 +59,6 @@ public:
   template <typename... Args>
     requires std::is_constructible_v<T, Args...>
   void store(Args &&...args) {
-    T *newT = new T{std::forward<Args>(args)...};
-
     while (true) {
       size_t localHead = head.load(std::memory_order_relaxed);
       size_t nextHead = localHead + 1;
@@ -63,7 +67,7 @@ public:
         nextHead = 0;
       }
 
-      if (unlikely(!generations[nextHead].tryStore(newT))) {
+      if (unlikely(!generations[nextHead].tryStore(args...))) {
         continue;
       }
       while (!generations[localHead].tryRemoveOwner()) {

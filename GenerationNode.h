@@ -37,24 +37,22 @@ private:
 private:
   bool tryFree() {
     state_t toFreeState{NodeState::Full, 1};
-    static constexpr state_t freeingState{NodeState::Freeing, 0};
     static constexpr state_t freedState{NodeState::Empty, 0};
-
-    if (!currState.compare_exchange_strong(toFreeState, freeingState)) {
-      return false;
-    }
-
-    DEBUG_ASSERT(currT != nullptr && "double free");
-    delete currT;
-    currT = nullptr;
-
-    currState.store(freedState);
-
-    return true;
+    return currState.compare_exchange_strong(toFreeState, freedState);
   }
 
 public:
-  bool tryStore(T *toStore) {
+  // only call on construction
+  constexpr void addInitPointer(T *ptr)
+  {
+    currT = ptr;
+  }
+  ~GenerationNode()
+  {
+    delete currT;
+  }
+  template<typename ... Args>
+  bool tryStore(Args&&... args) {
     state_t emptyState{NodeState::Empty, 0};
     static constexpr state_t constructingState{NodeState::Filling, 0};
     static constexpr state_t constructedState{NodeState::Full, 1};
@@ -62,9 +60,10 @@ public:
     if (!currState.compare_exchange_strong(emptyState, constructingState)) {
       return false;
     }
-    currT = toStore;
-    currState.store(constructedState);
 
+    new (currT) T{std::forward<Args>(args)...};
+
+    currState.store(constructedState);
     return true;
   }
   bool tryAddOwner() {

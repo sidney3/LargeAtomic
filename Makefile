@@ -1,7 +1,7 @@
 CC = clang++
 
 EFlags	  := -Wall -Wextra -Wpedantic -Werror -Wconversion -Wsign-conversion -Wshadow -Wnon-virtual-dtor -Wold-style-cast -Wcast-align -Wunused -Woverloaded-virtual -Wdouble-promotion -Wformat=2 -Wnull-dereference -Wno-unused-parameter
-CFLAGS    := -g -Iinclude -O2 -std=c++23 $(EFlags)
+CFLAGS    := -O2 -std=c++23 $(EFlags)
 HEAD      := $(wildcard *.h)
 SRC       := $(wildcard *.cpp)
 OBJS      := $(addsuffix .o,$(basename $(SRC)))
