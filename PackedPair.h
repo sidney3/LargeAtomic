@@ -36,7 +36,7 @@ private:
   uint64_t data;
 
   // Helper to pack the value and enum into a single 64-bit integer.
-  static uint64_t pack(T value, U enumValue) {
+  static constexpr uint64_t pack(T value, U enumValue) {
     uint64_t packedEnum = static_cast<uint64_t>(enumValue) << 32;
     uint64_t packedValue = static_cast<uint64_t>(value) & 0xFFFFFFFF;
     return packedEnum | packedValue;

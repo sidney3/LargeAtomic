@@ -31,14 +31,14 @@ template <typename T> class GenerationNode {
   T *currT = nullptr;
 
 private:
-  static NodeState getStateEnum(state_t s) { return s.first(); }
-  static uint32_t getOwnersCount(state_t s) { return s.second(); }
+  static constexpr NodeState getStateEnum(state_t s) { return s.first(); }
+  static constexpr uint32_t getOwnersCount(state_t s) { return s.second(); }
 
 private:
   bool tryFree() {
     state_t toFreeState{NodeState::Full, 1};
-    state_t freeingState{NodeState::Freeing, 0};
-    state_t freedState{NodeState::Empty, 0};
+    static constexpr state_t freeingState{NodeState::Freeing, 0};
+    static constexpr state_t freedState{NodeState::Empty, 0};
 
     if (!currState.compare_exchange_strong(toFreeState, freeingState)) {
       return false;
@@ -56,8 +56,8 @@ private:
 public:
   bool tryStore(T *toStore) {
     state_t emptyState{NodeState::Empty, 0};
-    state_t constructingState{NodeState::Filling, 0};
-    state_t constructedState{NodeState::Full, 1};
+    static constexpr state_t constructingState{NodeState::Filling, 0};
+    static constexpr state_t constructedState{NodeState::Full, 1};
 
     if (!currState.compare_exchange_strong(emptyState, constructingState)) {
       return false;
@@ -67,8 +67,6 @@ public:
 
     return true;
   }
-
-public:
   bool tryAddOwner() {
     auto localState = currState.load();
 

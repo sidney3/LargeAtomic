@@ -35,23 +35,23 @@ template <typename Fn> auto benchmarkFunction(Fn &&fn) {
   return system_clock::now() - start;
 }
 
-template <typename IntRegister>
+template<long Size>
+struct LargeStruct
+{
+  std::array<char, Size> data{};
+};
+
+template <typename T, typename IntRegister>
 void testRegister(IntRegister &&concurrentStore) {
   const int numReaders = 1;
-  const int iterations_per_thread = 10000;
+  const int iterations_per_thread = 1000;
 
   std::vector<std::thread> threads;
 
-  // Random generator for introducing random delays
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> dis(1, 100);
-
   // Lambda function for threads to perform random writes
-  auto writer = [&concurrentStore, &gen, &dis]() {
+  auto writer = [&concurrentStore]() {
     for (int i = 0; i < iterations_per_thread; ++i) {
-      int newValue = dis(gen); // Generate a random value to store
-      concurrentStore.store(newValue);
+      concurrentStore.store(T{});
     }
   };
 
@@ -75,15 +75,17 @@ void testRegister(IntRegister &&concurrentStore) {
 }
 
 void benchmark() {
+  using testing_t = LargeStruct<1096>;
+
   std::cout << "Naive locking register: " << std::endl;
-  std::cout << duration_cast<nanoseconds>(benchmarkFunction([]() {
-                 testRegister(LockingLargeAtomic<int>());
+  std::cout << duration_cast<milliseconds>(benchmarkFunction([]() {
+                 testRegister<testing_t>(LockingLargeAtomic<testing_t>());
                })).count()
-            << "ns" << std::endl;
+            << "ms" << std::endl;
 
   std::cout << "Lock free LargeAtomic: " << std::endl;
-  std::cout << duration_cast<nanoseconds>(benchmarkFunction([]() {
-                 testRegister(LargeAtomic<int>());
+  std::cout << duration_cast<milliseconds>(benchmarkFunction([]() {
+                 testRegister<testing_t>(LargeAtomic<testing_t>());
                })).count()
-            << "ns" << std::endl;
+            << "ms" << std::endl;
 }
