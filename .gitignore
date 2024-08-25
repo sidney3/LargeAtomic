@@ -1,0 +1,14 @@
+*
+!*.*
+!*/
+!Makefile
+
+test_db
+logs
+database
+compile_commands.json
+.cache
+~
+*.o
+.DS_STORE
+out.txt
